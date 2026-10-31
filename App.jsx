@@ -1,925 +1,1504 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  BadgeCheck,
-  Bookmark,
-  Camera,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Heart,
-  Home,
-  MapPin,
-  MessageCircle,
-  PackageOpen,
-  Plus,
-  Search,
-  Send,
-  SlidersHorizontal,
-  Sparkles,
-  Tag,
-  UserRound,
-  X,
-} from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  Search, Shield, MapPin, MessageSquare, Heart, Star, Phone, CheckCircle, 
+  Tag, Filter, AlertTriangle, ArrowUpDown, Bell, Eye, User, X, Sliders, 
+  Send, Compass, Layers, Check, ShieldCheck, ChevronRight, Share2, ThumbsUp, PlusCircle, Camera,
+  SlidersHorizontal, DollarSign, UserCheck, ShieldAlert, Activity, CheckSquare, XCircle,
+  MessageCircle, ExternalLink, Bot, Radio, Globe, Smartphone, Laptop,
+  Sun, Moon, LogIn, UserPlus, LogOut, Lock, Mail, Key, Settings
+} from 'lucide-react';
 
-const citySubcities = {
-  "Addis Ababa": [
-    "Bole",
-    "Kirkos",
-    "Yeka",
-    "Arada",
-    "Lideta",
-    "Nifas Silk-Lafto",
-  ],
-  Hawassa: ["Tabor", "Misrak", "Menaharia", "Dato"],
-  Adama: ["Bole", "Gendegerada", "Dabe"],
+// --- INITIAL MOCK DATA ---
+const CITIES = [
+  { id: 'all', name: 'All Cities', amharic: 'ሁሉም ከተሞች' },
+  { id: 'addis-ababa', name: 'Addis Ababa', amharic: 'አዲስ አበባ' },
+  { id: 'hawassa', name: 'Hawassa', amharic: 'ሐዋሳ' },
+  { id: 'adama', name: 'Adama', amharic: 'አዳማ' },
+  { id: 'bishoftu', name: 'Bishoftu', amharic: 'ቢሾፍቱ' },
+  { id: 'bahir-dar', name: 'Bahir Dar', amharic: 'ባሕር ዳር' },
+];
+
+const SUBCITIES = {
+  'addis-ababa': ['Bole', 'Kirkos', 'Yeka', 'Arada', 'Nifas Silk', 'Gullele', 'Lideta', 'Akaky Kaliti'],
+  'hawassa': ['Tabor', 'Hayek Dar', 'Menehariya'],
+  'adama': ['Bole', 'Daka', 'Luku'],
+  'bishoftu': ['Center', 'Industrial Area'],
+  'bahir-dar': ['Belay Zeleke', 'Gish Abay']
 };
 
-const initialListings = [
+const CITY_COORDINATES = [
+  { id: 'addis-ababa', latitude: 9.03, longitude: 38.74 },
+  { id: 'hawassa', latitude: 7.05, longitude: 38.47 },
+  { id: 'adama', latitude: 8.54, longitude: 39.27 },
+  { id: 'bishoftu', latitude: 8.75, longitude: 38.98 },
+  { id: 'bahir-dar', latitude: 11.59, longitude: 37.39 },
+];
+
+const nearestCityId = (latitude, longitude) => {
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const distanceTo = (city) => {
+    const latitudeDelta = toRadians(city.latitude - latitude);
+    const longitudeDelta = toRadians(city.longitude - longitude);
+    const haversine =
+      Math.sin(latitudeDelta / 2) ** 2 +
+      Math.cos(toRadians(latitude)) *
+        Math.cos(toRadians(city.latitude)) *
+        Math.sin(longitudeDelta / 2) ** 2;
+    return 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  };
+
+  return CITY_COORDINATES.reduce((nearest, city) =>
+    distanceTo(city) < distanceTo(nearest) ? city : nearest,
+  ).id;
+};
+
+const MOCK_CATEGORIES = [
+  { id: 'all', name: 'All Categories', amharic: 'ሁሉም' },
+  { id: 'phones', name: 'Phones & Tech', amharic: 'ስልኮች እና ቴክ' },
+  { id: 'vehicles', name: 'Vehicles', amharic: 'መኪኖች' },
+  { id: 'real-estate', name: 'Real Estate / Rent', amharic: 'ቤት እና ሪል እስቴት' },
+  { id: 'agriculture', name: 'Livestock & Ag', amharic: 'እርሻ እና እንስሳት' },
+  { id: 'electronics', name: 'Electronics', amharic: 'ኤሌክትሮኒክስ' },
+  { id: 'furniture', name: 'Furniture', amharic: 'የቤት ዕቃዎች' },
+  { id: 'gym-fitness', name: 'Gym & Fitness', amharic: 'ጂም እና ስፖርት' },
+  { id: 'books-education', name: 'Books & Education', amharic: 'መጻሕፍት' },
+  { id: 'fashion-apparel', name: 'Fashion & Apparel', amharic: 'ልብሶች እና ጫማዎች' },
+  { id: 'beauty-cosmetics', name: 'Beauty & Cosmetics', amharic: 'ኮስሞቲክስ' },
+];
+
+const INITIAL_LISTINGS = [
   {
-    id: 1,
-    title: "Minimal oak writing desk",
-    category: "Furniture",
-    price: 8500,
-    condition: "Like new",
-    city: "Addis Ababa",
-    subcity: "Bole",
-    seller: "Mimi T.",
+    id: 101,
+    title: 'iPhone 13 Pro Max - 256GB Sierra Blue',
+    titleAmharic: 'አይፎን 13 ፕሮ ማክስ - 256ጂቢ',
+    category: 'phones',
+    price: 95000,
+    condition: 'Like New',
+    city: 'addis-ababa',
+    subcity: 'Bole',
+    image: 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?auto=format&fit=crop&w=600&q=80',
     verified: true,
-    posted: "2 hours ago",
-    image:
-      "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#e9e3d8]",
+    createdDate: '2026-02-20',
+    safeSpot: 'Bole Medhanialem Police Station Compound',
+    telegramHandle: '@abebe_tech_et',
+    seller: {
+      name: 'Abebe Kebede',
+      rating: 4.9,
+      reviewCount: 28,
+      phone: '+251 91 123 4567'
+    },
+    description: 'Factory unlocked iPhone 13 Pro Max. Comes with original cable and silicone case. Battery health is at 89%.'
   },
   {
-    id: 2,
-    title: "iPhone 12 · 128 GB",
-    category: "Electronics",
-    price: 32000,
-    condition: "Good",
-    city: "Addis Ababa",
-    subcity: "Kirkos",
-    seller: "Dawit K.",
+    id: 102,
+    title: 'Toyota Vitz 2018 - Automatic, Low Mileage',
+    titleAmharic: 'ቶዮታ ቪትዝ 2018 - አውቶማቲክ',
+    category: 'vehicles',
+    price: 1850000,
+    condition: 'Excellent',
+    city: 'addis-ababa',
+    subcity: 'Kirkos',
+    image: 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80',
     verified: true,
-    posted: "5 hours ago",
-    image:
-      "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#e6e9e7]",
+    createdDate: '2026-02-22',
+    safeSpot: 'Kazanchis Commercial Bank Compound',
+    telegramHandle: '@tigist_auto',
+    seller: {
+      name: 'Tigist Assefa',
+      rating: 4.8,
+      reviewCount: 15,
+      phone: '+251 92 345 6789'
+    },
+    description: 'Very clean Toyota Vitz. First owner in Ethiopia. Well maintained with regular service records.'
   },
   {
-    id: 3,
-    title: "Everyday leather tote",
-    category: "Fashion",
-    price: 1800,
-    condition: "Good",
-    city: "Hawassa",
-    subcity: "Tabor",
-    seller: "Hana M.",
+    id: 103,
+    title: '2-Bedroom Apartment Rent in Bole Atlas',
+    titleAmharic: 'ባለ 2 መኝታ ቤት ኪራይ ቦሌ አትላስ',
+    category: 'real-estate',
+    price: 45000,
+    condition: 'Furnished',
+    city: 'addis-ababa',
+    subcity: 'Bole',
+    image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=600&q=80',
     verified: false,
-    posted: "Yesterday",
-    image:
-      "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#efe5dc]",
+    createdDate: '2026-02-25',
+    safeSpot: 'Atlas Hotel Intersection',
+    telegramHandle: '@bole_rentals',
+    seller: {
+      name: 'Yonas Tadesse',
+      rating: 4.5,
+      reviewCount: 9,
+      phone: '+251 93 456 7890'
+    },
+    description: 'Fully furnished apartment including high-speed internet, backup generator, and 24/7 security guard.'
   },
   {
-    id: 4,
-    title: "Classic acoustic guitar",
-    category: "Hobbies",
+    id: 104,
+    title: 'Foldable Treadmill - Home Workout',
+    titleAmharic: 'የቤት ውስጥ ትሬድሚል',
+    category: 'gym-fitness',
+    price: 42000,
+    condition: 'Good',
+    city: 'addis-ababa',
+    subcity: 'Yeka',
+    image: 'https://images.unsplash.com/photo-1576678927484-cc907957088c?auto=format&fit=crop&w=600&q=80',
+    verified: true,
+    createdDate: '2026-10-25',
+    safeSpot: 'Megenagna Police Station Compound',
+    telegramHandle: '@fitfinds_addis',
+    seller: { name: 'Marta Bekele', rating: 4.8, reviewCount: 12, phone: '+251 91 234 5678' },
+    description: 'Compact foldable treadmill with working speed controls and safety key. Great for home workouts.'
+  },
+  {
+    id: 105,
+    title: 'Dumbbell Set - 2 x 10kg',
+    titleAmharic: 'የዱምቤል ስብስብ - 2 x 10 ኪ.ግ',
+    category: 'gym-fitness',
     price: 6500,
-    condition: "Like new",
-    city: "Adama",
-    subcity: "Bole",
-    seller: "Robel A.",
-    verified: true,
-    posted: "Yesterday",
-    image:
-      "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#eee4d7]",
-  },
-  {
-    id: 5,
-    title: "Ceramic coffee set",
-    category: "Home & living",
-    price: 1200,
-    condition: "New",
-    city: "Addis Ababa",
-    subcity: "Yeka",
-    seller: "Selam B.",
-    verified: true,
-    posted: "2 days ago",
-    image:
-      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#e9e4dc]",
-  },
-  {
-    id: 6,
-    title: "Mountain bike, ready to ride",
-    category: "Sports",
-    price: 14500,
-    condition: "Good",
-    city: "Hawassa",
-    subcity: "Misrak",
-    seller: "Yonas G.",
+    condition: 'Good',
+    city: 'hawassa',
+    subcity: 'Tabor',
+    image: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=600&q=80',
     verified: false,
-    posted: "3 days ago",
-    image:
-      "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=900&q=85",
-    color: "bg-[#e1e8e4]",
+    createdDate: '2026-10-24',
+    safeSpot: 'Tabor Police Station Compound',
+    telegramHandle: '@hawassa_sports',
+    seller: { name: 'Samuel Tadesse', rating: 4.6, reviewCount: 7, phone: '+251 92 345 6780' },
+    description: 'Pair of sturdy adjustable dumbbells, suitable for strength training at home.'
   },
+  {
+    id: 106,
+    title: 'Adjustable Bench Press with Bar',
+    titleAmharic: 'የቤንች ፕሬስ ከባር ጋር',
+    category: 'gym-fitness',
+    price: 18000,
+    condition: 'Excellent',
+    city: 'adama',
+    subcity: 'Daka',
+    image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=600&q=80',
+    verified: true,
+    createdDate: '2026-10-23',
+    safeSpot: 'Adama City Administration Compound',
+    telegramHandle: '@adama_fitness',
+    seller: { name: 'Dawit Girma', rating: 4.9, reviewCount: 18, phone: '+251 93 456 7891' },
+    description: 'Adjustable weight bench and barbell set. Stable frame with multiple incline positions.'
+  },
+  {
+    id: 107,
+    title: 'Grade 10 Textbooks - Complete Set',
+    titleAmharic: 'የ10ኛ ክፍል መጻሕፍት ሙሉ ስብስብ',
+    category: 'books-education',
+    price: 1800,
+    condition: 'Good',
+    city: 'bahir-dar',
+    subcity: 'Belay Zeleke',
+    image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80',
+    verified: false,
+    createdDate: '2026-10-22',
+    safeSpot: 'Bahir Dar Public Library Entrance',
+    telegramHandle: '@books_bahir',
+    seller: { name: 'Hana Alemu', rating: 4.7, reviewCount: 5, phone: '+251 94 567 8901' },
+    description: 'A complete set of gently used Grade 10 textbooks. Pages are clean and all books are included.'
+  },
+  {
+    id: 108,
+    title: 'Traditional Dress and Leather Shoes',
+    titleAmharic: 'ባህላዊ ቀሚስ እና የቆዳ ጫማ',
+    category: 'fashion-apparel',
+    price: 3800,
+    condition: 'Like New',
+    city: 'bishoftu',
+    subcity: 'Center',
+    image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=600&q=80',
+    verified: false,
+    createdDate: '2026-10-21',
+    safeSpot: 'Bishoftu Police Station Compound',
+    telegramHandle: '@bishoftu_style',
+    seller: { name: 'Rahel Mulu', rating: 4.8, reviewCount: 11, phone: '+251 95 678 9012' },
+    description: 'Beautifully kept traditional outfit paired with leather shoes. Worn only a few times.'
+  },
+  {
+    id: 109,
+    title: 'Skincare and Makeup Gift Set',
+    titleAmharic: 'የቆዳ እንክብካቤ እና ሜካፕ ስብስብ',
+    category: 'beauty-cosmetics',
+    price: 2400,
+    condition: 'Like New',
+    city: 'addis-ababa',
+    subcity: 'Bole',
+    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=80',
+    verified: true,
+    createdDate: '2026-10-20',
+    safeSpot: 'Bole Medhanialem Police Station Compound',
+    telegramHandle: '@beautyfinds_et',
+    seller: { name: 'Selamawit Hailu', rating: 4.9, reviewCount: 14, phone: '+251 96 789 0123' },
+    description: 'Gently used gift set with unopened skincare products and makeup accessories.'
+  }
 ];
 
-const categories = [
-  "Everything",
-  "Electronics",
-  "Furniture",
-  "Fashion",
-  "Home & living",
-  "Hobbies",
-  "Sports",
-];
+const readStoredValue = (key, fallback) => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch (error) {
+    console.error(`Could not read ${key} from local storage.`, error);
+    return fallback;
+  }
+};
 
-const money = (amount) => `ETB ${Number(amount).toLocaleString("en-ET")}`;
+const cityName = (cityId) =>
+  CITIES.find((city) => city.id === cityId)?.name || cityId;
 
-function ListingCard({ listing, saved, onSave, onChat }) {
-  return (
-    <article className="group overflow-hidden rounded-[1.4rem] border border-[#ece9e2] bg-white transition hover:-translate-y-1 hover:shadow-[0_14px_38px_rgba(27,45,34,0.09)]">
-      <div className={`relative aspect-[1.15] overflow-hidden ${listing.color}`}>
-        <img
-          src={listing.image}
-          alt={listing.title}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-          loading="lazy"
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
-        />
-        <button
-          type="button"
-          aria-label={saved ? "Remove from saved items" : "Save item"}
-          onClick={() => onSave(listing.id)}
-          className={`absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full shadow-sm transition ${
-            saved
-              ? "bg-[#214d38] text-white"
-              : "bg-white/90 text-[#344439] hover:bg-white"
-          }`}
-        >
-          <Heart size={18} fill={saved ? "currentColor" : "none"} />
-        </button>
-        <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#39483d] backdrop-blur">
-          {listing.condition}
-        </span>
-      </div>
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 min-h-11 text-[15px] font-semibold leading-5 text-[#25352a]">
-            {listing.title}
-          </h3>
-          <span className="shrink-0 rounded-full bg-[#f3f5ef] px-2.5 py-1 text-[10px] font-medium text-[#687365]">
-            {listing.category}
-          </span>
-        </div>
-        <p className="mt-2 text-lg font-bold tracking-tight text-[#214d38]">
-          {money(listing.price)}
-        </p>
-        <div className="mt-3 flex items-center justify-between border-t border-[#f0eee8] pt-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1 text-xs font-medium text-[#455448]">
-              <span className="truncate">{listing.seller}</span>
-              {listing.verified && (
-                <BadgeCheck size={14} className="shrink-0 text-[#4c8664]" />
-              )}
-            </p>
-            <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-[#8b9288]">
-              <MapPin size={12} />
-              {listing.subcity}, {listing.city}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onChat(listing)}
-            aria-label={`Message ${listing.seller} about ${listing.title}`}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#e5e9e1] text-[#315940] transition hover:bg-[#eff4ed]"
-          >
-            <MessageCircle size={17} />
-          </button>
-        </div>
-      </div>
-    </article>
-  );
-}
+const safelyCallTelegram = (action, callback) => {
+  try {
+    return callback();
+  } catch (error) {
+    console.warn(`Telegram ${action} is unavailable.`, error);
+    return undefined;
+  }
+};
 
-function App() {
-  const [listings, setListings] = useState(initialListings);
-  const [savedIds, setSavedIds] = useState([]);
-  const [activeTab, setActiveTab] = useState("home");
-  const [category, setCategory] = useState("Everything");
-  const [search, setSearch] = useState("");
-  const [city, setCity] = useState("All cities");
-  const [subcity, setSubcity] = useState("All subcities");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showListingForm, setShowListingForm] = useState(false);
-  const [listingCityForm, setListingCityForm] = useState("Addis Ababa");
-  const [chatListing, setChatListing] = useState(null);
-  const [messages, setMessages] = useState({});
-  const [draft, setDraft] = useState("");
-  const [toast, setToast] = useState("");
+const getTelegramProfile = (webApp) =>
+  safelyCallTelegram('profile detection', () => {
+    const tgUser = webApp?.initDataUnsafe?.user;
+    if (!tgUser || typeof tgUser !== 'object') return null;
+
+    const firstName = typeof tgUser.first_name === 'string' ? tgUser.first_name.trim() : '';
+    const lastName = typeof tgUser.last_name === 'string' ? tgUser.last_name.trim() : '';
+    const username = typeof tgUser.username === 'string' ? tgUser.username.trim() : '';
+    const id = Number.isSafeInteger(tgUser.id) ? tgUser.id : undefined;
+    const photoUrl =
+      typeof tgUser.photo_url === 'string' && tgUser.photo_url.startsWith('https://')
+        ? tgUser.photo_url
+        : undefined;
+    const name = `${firstName} ${lastName}`.trim();
+
+    if (!name && !username && id === undefined) return null;
+    return {
+      name: name || username || 'Telegram User',
+      firstName,
+      lastName,
+      username: username ? `@${username}` : '',
+      ...(id !== undefined ? { id } : {}),
+      ...(photoUrl ? { photoUrl } : {}),
+      isTelegramUser: true,
+    };
+  });
+
+export default function App() {
+  // --- THEME STATE (Dark Mode / Light Mode) ---
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('liyu_theme') === 'dark';
+  });
 
   useEffect(() => {
-    const telegram = window.Telegram?.WebApp;
-    if (!telegram) return;
-    telegram.ready();
-    telegram.expand();
-    telegram.setHeaderColor?.("#f7f6f1");
-    telegram.setBackgroundColor?.("#f7f6f1");
+    const root = document.documentElement;
+    const body = document.body;
+    if (darkMode) {
+      root.classList.add('dark');
+      body.classList.add('dark', 'bg-slate-900', 'text-slate-100');
+      body.classList.remove('bg-slate-50', 'text-slate-900');
+      localStorage.setItem('liyu_theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      body.classList.remove('dark', 'bg-slate-900', 'text-slate-100');
+      body.classList.add('bg-slate-50', 'text-slate-900');
+      localStorage.setItem('liyu_theme', 'light');
+    }
+  }, [darkMode]);
+
+  // --- AUTHENTICATION STATE ---
+  const [user, setUser] = useState(() => {
+    return readStoredValue('liyu_user', null);
+  });
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [hideLocation, setHideLocation] = useState(
+    () => readStoredValue('liyu_hide_location', false) === true,
+  );
+  const [authTab, setAuthTab] = useState('signin'); // 'signin' or 'signup'
+  const [authForm, setAuthForm] = useState({ name: '', phone: '', password: '' });
+  const [sellError, setSellError] = useState('');
+  const [savedIds, setSavedIds] = useState(() => readStoredValue('liyu_saved', []));
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sellCity, setSellCity] = useState('addis-ababa');
+  const citySelectionChanged = useRef(false);
+  const [locationStatus, setLocationStatus] = useState('pending');
+
+  // --- APP STATES ---
+  const [lang, setLang] = useState('EN');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCity, setSelectedCity] = useState('all');
+  const [selectedSubcity, setSelectedSubcity] = useState('all');
+  const [listings, setListings] = useState(() =>
+    (() => {
+      const storedListings = readStoredValue('liyu_listings', null);
+      if (!Array.isArray(storedListings)) return INITIAL_LISTINGS;
+
+      const newListings = INITIAL_LISTINGS.filter(
+        (initialListing) =>
+          !storedListings.some((storedListing) => storedListing.id === initialListing.id),
+      );
+      return [...newListings, ...storedListings];
+    })(),
+  );
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [showSellModal, setShowSellModal] = useState(false);
+  const [activeChat, setActiveChat] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState('');
+
+  // Initialize Telegram WebApp and safely read the optional Telegram profile.
+  useEffect(() => {
+    const webApp = safelyCallTelegram('WebApp detection', () => window.Telegram?.WebApp);
+    if (!webApp) return;
+
+    safelyCallTelegram('ready()', () => webApp.ready?.());
+    safelyCallTelegram('expand()', () => webApp.expand?.());
+
+    const tgProfile = getTelegramProfile(webApp);
+    if (tgProfile) {
+      setUser(tgProfile);
+      try {
+        localStorage.setItem('liyu_user', JSON.stringify(tgProfile));
+      } catch (error) {
+        console.error('Could not save the Telegram profile locally.', error);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    if (!toast) return undefined;
-    const timeout = window.setTimeout(() => setToast(""), 2800);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
+    const webApp = safelyCallTelegram('WebApp detection', () => window.Telegram?.WebApp);
+    if (!webApp) return;
 
-  const visibleListings = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return listings.filter((listing) => {
-      const matchesTab =
-        activeTab !== "saved" || savedIds.includes(listing.id);
-      const matchesCategory =
-        category === "Everything" || listing.category === category;
-      const matchesCity = city === "All cities" || listing.city === city;
-      const matchesSubcity =
-        subcity === "All subcities" || listing.subcity === subcity;
-      const matchesQuery =
-        !query ||
-        `${listing.title} ${listing.category} ${listing.city} ${listing.subcity} ${listing.seller}`
-          .toLowerCase()
-          .includes(query);
-      const matchesMin = !minPrice || listing.price >= Number(minPrice);
-      const matchesMax = !maxPrice || listing.price <= Number(maxPrice);
-      return (
-        matchesTab &&
-        matchesCategory &&
-        matchesCity &&
-        matchesSubcity &&
-        matchesQuery &&
-        matchesMin &&
-        matchesMax
-      );
-    });
-  }, [
-    activeTab,
-    category,
-    city,
-    listings,
-    maxPrice,
-    minPrice,
-    savedIds,
-    search,
-    subcity,
-  ]);
-
-  const toggleSaved = (id) => {
-    setSavedIds((current) =>
-      current.includes(id) ? current.filter((savedId) => savedId !== id) : [...current, id],
+    const headerColor = darkMode ? '#1e293b' : '#047857';
+    const backgroundColor = darkMode ? '#0f172a' : '#f8fafc';
+    safelyCallTelegram('setHeaderColor()', () => webApp.setHeaderColor?.(headerColor));
+    safelyCallTelegram('setBackgroundColor()', () =>
+      webApp.setBackgroundColor?.(backgroundColor),
     );
+  }, [darkMode]);
+
+  useEffect(() => {
+    const webApp = safelyCallTelegram('BackButton detection', () => window.Telegram?.WebApp);
+    const backButton = webApp?.BackButton;
+    if (!backButton || !(activeChat || selectedListing || showSellModal || showAuthModal || showSettingsModal)) {
+      return undefined;
+    }
+
+    const handleBack = () => {
+      if (activeChat) setActiveChat(null);
+      else if (selectedListing) setSelectedListing(null);
+      else if (showSellModal) setShowSellModal(false);
+      else if (showAuthModal) setShowAuthModal(false);
+      else if (showSettingsModal) setShowSettingsModal(false);
+    };
+
+    safelyCallTelegram('BackButton.onClick()', () => backButton.onClick?.(handleBack));
+    safelyCallTelegram('BackButton.show()', () => backButton.show?.());
+
+    return () => {
+      safelyCallTelegram('BackButton.offClick()', () => backButton.offClick?.(handleBack));
+      safelyCallTelegram('BackButton.hide()', () => backButton.hide?.());
+    };
+  }, [activeChat, selectedListing, showSellModal, showAuthModal, showSettingsModal]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      return undefined;
+    }
+
+    let active = true;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (!active || citySelectionChanged.current) return;
+        setSelectedCity(nearestCityId(coords.latitude, coords.longitude));
+        setSelectedSubcity('all');
+        setLocationStatus('detected');
+      },
+      () => {
+        if (active) setLocationStatus('unavailable');
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('liyu_listings', JSON.stringify(listings));
+    } catch (error) {
+      console.error('Could not save marketplace listings locally.', error);
+    }
+  }, [listings]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('liyu_saved', JSON.stringify(savedIds));
+    } catch (error) {
+      console.error('Could not save favorites locally.', error);
+    }
+  }, [savedIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('liyu_hide_location', JSON.stringify(hideLocation));
+    } catch (error) {
+      console.error('Could not save location privacy preference locally.', error);
+    }
+  }, [hideLocation]);
+
+  const triggerHaptic = () => {
+    const hapticFeedback = safelyCallTelegram(
+      'haptic feedback detection',
+      () => window.Telegram?.WebApp?.HapticFeedback,
+    );
+    if (typeof hapticFeedback?.impactOccurred === 'function') {
+      safelyCallTelegram('haptic feedback', () => hapticFeedback.impactOccurred('light'));
+    }
   };
 
-  const openChat = (listing) => {
-    setChatListing(listing);
-    setActiveTab("inbox");
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+  const handleTelegramSignIn = () => {
+    triggerHaptic();
+    const webApp = safelyCallTelegram('WebApp detection', () => window.Telegram?.WebApp);
+    const telegramProfile = getTelegramProfile(webApp);
+
+    if (!telegramProfile) {
+      setAuthNotice(
+        'Open this app inside Telegram to sign in automatically. Browser-based Telegram Login requires a bot Login Widget configured by the app owner.',
+      );
+      return;
+    }
+
+    setUser(telegramProfile);
+    try {
+      localStorage.setItem('liyu_user', JSON.stringify(telegramProfile));
+    } catch (error) {
+      console.error('Could not save the Telegram profile locally.', error);
+    }
+    setAuthNotice('');
+    setShowAuthModal(false);
   };
 
-  const sendMessage = (event) => {
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    if (!authForm.phone || !authForm.password) return;
+    triggerHaptic();
+
+    const userData = {
+      name: authTab === 'signup' ? authForm.name : (authForm.name || 'Liyu Member'),
+      phone: authForm.phone,
+      isTelegramUser: false
+    };
+
+    setUser(userData);
+    localStorage.setItem('liyu_user', JSON.stringify(userData));
+    setShowAuthModal(false);
+    setAuthForm({ name: '', phone: '', password: '' });
+    setAuthNotice('');
+  };
+
+  const handleLogout = () => {
+    triggerHaptic();
+    setUser(null);
+    localStorage.removeItem('liyu_user');
+  };
+
+  const handleSellRequest = () => {
+    triggerHaptic();
+    if (!user) {
+      setAuthTab('signin');
+      setShowAuthModal(true);
+      return;
+    }
+    setSellError('');
+    setShowSellModal(true);
+  };
+
+  const handleSellSubmit = (event) => {
     event.preventDefault();
-    const text = draft.trim();
-    if (!text || !chatListing) return;
-    setMessages((current) => ({
-      ...current,
-      [chatListing.id]: [
-        ...(current[chatListing.id] || [
-          {
-            from: "seller",
-            text: `Hi! Thanks for asking about ${chatListing.title}. Let me know what you'd like to know.`,
-          },
-        ]),
-        { from: "buyer", text },
-      ],
-    }));
-    setDraft("");
-  };
+    const formData = new FormData(event.currentTarget);
+    const city = String(formData.get('city') || '');
+    const subcity = String(formData.get('subcity') || '');
+    const price = Number(formData.get('price'));
+    const title = String(formData.get('title') || '').trim();
+    const phone = String(formData.get('phone') || '').trim();
+    const safeSpot = String(formData.get('safeSpot') || '').trim();
 
-  const publishListing = (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const title = String(form.get("title") || "").trim();
-    const price = Number(form.get("price"));
-    const listingCity = String(form.get("city") || "");
-    const listingSubcity = String(form.get("subcity") || "");
-    if (!title || !price || !listingCity || !listingSubcity) return;
+    if (!title || !price || !city || !subcity || !phone || !safeSpot) {
+      setSellError(lang === 'EN' ? 'Complete all required fields.' : 'እባክዎ አስፈላጊ መረጃዎችን ይሙሉ።');
+      return;
+    }
+
     const newListing = {
       id: Date.now(),
       title,
+      titleAmharic: String(formData.get('titleAmharic') || '').trim() || title,
+      category: String(formData.get('category') || 'phones'),
       price,
-      city: listingCity,
-      subcity: listingSubcity,
-      category: String(form.get("category") || "Home & living"),
-      condition: String(form.get("condition") || "Good"),
-      seller: "You",
-      verified: false,
-      posted: "Just now",
+      condition: String(formData.get('condition') || 'Good'),
+      city,
+      subcity,
       image:
-        "https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=900&q=85",
-      color: "bg-[#e9e3d8]",
+        String(formData.get('image') || '').trim() ||
+        'https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?auto=format&fit=crop&w=900&q=85',
+      verified: Boolean(user.isTelegramUser),
+      createdDate: new Date().toISOString().slice(0, 10),
+      safeSpot,
+      telegramHandle: String(formData.get('telegramHandle') || '')
+        .trim()
+        .replace(/^@/, ''),
+      seller: {
+        name: user.name,
+        rating: 0,
+        reviewCount: 0,
+        phone,
+        ...(user.id != null ? { ownerId: user.id } : {}),
+        ...(user.phone ? { ownerPhone: user.phone } : {}),
+      },
+      hideLocation: formData.has('hideLocation'),
+      description: String(formData.get('description') || '').trim(),
     };
+
     setListings((current) => [newListing, ...current]);
-    setActiveTab("home");
-    setCategory("Everything");
-    setCity("All cities");
-    setSubcity("All subcities");
-    setSearch("");
-    setShowListingForm(false);
-    setToast("Your listing is live on Liyu!");
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+    setSelectedCategory('all');
+    citySelectionChanged.current = true;
+    setLocationStatus('manual');
+    setSelectedCity('all');
+    setSelectedSubcity('all');
+    setShowSavedOnly(false);
+    setShowSellModal(false);
+    setSellError('');
+    triggerHaptic();
   };
 
-  const startSelling = () => {
-    setShowListingForm(true);
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+  const toggleSaved = (id) => {
+    setSavedIds((current) =>
+      current.includes(id)
+        ? current.filter((savedId) => savedId !== id)
+        : [...current, id],
+    );
+    triggerHaptic();
   };
 
-  const setSelectedCity = (value) => {
-    setCity(value);
-    setSubcity("All subcities");
+  const isListingLocationHidden = (item) => {
+    if (item.hideLocation === true) return true;
+    if (!hideLocation || item.hideLocation === false) return false;
+
+    const seller = item.seller || {};
+    if (user?.id != null && seller.ownerId != null) {
+      return String(user.id) === String(seller.ownerId);
+    }
+    if (user?.phone && seller.ownerPhone) {
+      return user.phone === seller.ownerPhone;
+    }
+    return Boolean(user?.name && seller.name === user.name);
   };
 
-  const navItems = [
-    { id: "home", label: "Explore", icon: Home },
-    { id: "saved", label: "Saved", icon: Bookmark },
-    { id: "inbox", label: "Inbox", icon: MessageCircle },
-  ];
+  // Filtered Listings Calculation
+  const filteredListings = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return listings.filter(item => {
+      const searchableText = [
+        item.title,
+        item.titleAmharic,
+        item.description,
+        item.subcity,
+        cityName(item.city),
+        item.seller.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+      const matchesCity = selectedCity === 'all' || item.city === selectedCity;
+      const matchesSubcity = selectedSubcity === 'all' || item.subcity === selectedSubcity;
+      const matchesMinPrice = !minPrice || item.price >= Number(minPrice);
+      const matchesMaxPrice = !maxPrice || item.price <= Number(maxPrice);
+      const matchesSaved = !showSavedOnly || savedIds.includes(item.id);
+
+      return matchesSearch && matchesCategory && matchesCity && matchesSubcity &&
+        matchesMinPrice && matchesMaxPrice && matchesSaved;
+    });
+  }, [
+    listings,
+    searchTerm,
+    selectedCategory,
+    selectedCity,
+    selectedSubcity,
+    minPrice,
+    maxPrice,
+    showSavedOnly,
+    savedIds,
+  ]);
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!messageInput.trim()) return;
+    triggerHaptic();
+    const newMsg = { id: Date.now(), text: messageInput, sender: 'user', time: 'Just now' };
+    setChatMessages(prev => [...prev, newMsg]);
+    setMessageInput('');
+
+    setTimeout(() => {
+      setChatMessages(prev => [
+        ...prev, 
+        { id: Date.now() + 1, text: 'እሺ ሰላም። እቃው አለ፤ መቼ መገናኘት እንችላለን?', sender: 'seller', time: 'Just now' }
+      ]);
+    }, 1000);
+  };
 
   return (
-    <div className="min-h-screen bg-[#f7f6f1] pb-24 text-[#25352a] selection:bg-[#d7e6d7]">
-      <header className="sticky top-0 z-30 border-b border-[#eae8df] bg-[#f7f6f1]/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 sm:px-7 lg:px-10">
-          <button
-            type="button"
-            onClick={() => setActiveTab("home")}
-            className="flex items-center gap-2.5 text-left"
-            aria-label="Liyu home"
-          >
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#214d38] text-white">
-              <Sparkles size={20} />
-            </span>
-            <span>
-              <span className="block text-[18px] font-bold leading-5 tracking-tight">
-                liyu<span className="text-[#d68d4e]">.</span>
-              </span>
-              <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-[#81887e]">
-                used market
-              </span>
-            </span>
-          </button>
-          <div className="hidden items-center gap-2 rounded-full border border-[#e7e5dc] bg-white px-3.5 py-2 text-sm text-[#556255] sm:flex">
-            <MapPin size={15} className="text-[#4d7656]" />
-            <select
-              value={city}
-              onChange={(event) => setSelectedCity(event.target.value)}
-              aria-label="Choose a city"
-              className="max-w-36 cursor-pointer appearance-none bg-transparent pr-1 font-medium outline-none"
-            >
-              <option>All cities</option>
-              {Object.keys(citySubcities).map((cityName) => (
-                <option key={cityName}>{cityName}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} />
-          </div>
-          <button
-            type="button"
-            onClick={startSelling}
-            className="flex items-center gap-2 rounded-full bg-[#214d38] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#183c2b]"
-          >
-            <Plus size={17} />
-            <span className="hidden sm:inline">Sell an item</span>
-            <span className="sm:hidden">Sell</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 sm:px-7 lg:px-10">
-        {activeTab === "inbox" ? (
-          <section className="mx-auto max-w-4xl py-8 sm:py-12">
-            <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#738071]">
-                Your conversations
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                Inbox<span className="text-[#d68d4e]">.</span>
-              </h1>
-              <p className="mt-2 text-sm text-[#7b837a]">
-                Connect with local buyers and sellers.
-              </p>
+    <div dir="ltr" className={`min-h-screen font-sans transition-colors duration-200 text-left ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      
+      {/* --- HEADER NAVBAR --- */}
+      <header className={`sticky top-0 z-30 shadow-md transition-colors ${darkMode ? 'bg-slate-800 text-white border-b border-slate-700' : 'bg-emerald-700 text-white'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          
+          {/* Logo */}
+          <button type="button" className="flex items-center space-x-3 cursor-pointer text-left" onClick={() => { setSelectedCategory('all'); citySelectionChanged.current = true; setLocationStatus('manual'); setSelectedCity('all'); setSelectedSubcity('all'); setShowSavedOnly(false); }}>
+            <div className="w-10 h-10 rounded-2xl bg-amber-400 flex items-center justify-center text-emerald-950 font-black text-base shadow-inner">
+              ልዩ
             </div>
-            {chatListing ? (
-              <div className="overflow-hidden rounded-[1.5rem] border border-[#eae8df] bg-white shadow-sm">
-                <div className="flex items-center gap-3 border-b border-[#eeece6] p-4">
-                  <button
-                    type="button"
-                    onClick={() => setChatListing(null)}
-                    aria-label="Back to conversations"
-                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[#f4f4ef]"
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
-                  <div className="grid h-10 w-10 place-items-center rounded-full bg-[#e6eee6] text-sm font-semibold text-[#315940]">
-                    {chatListing.seller.slice(0, 1)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1 text-sm font-semibold">
-                      {chatListing.seller}
-                      {chatListing.verified && (
-                        <BadgeCheck size={15} className="text-[#4c8664]" />
-                      )}
-                    </p>
-                    <p className="truncate text-xs text-[#81887e]">
-                      {chatListing.title} · {money(chatListing.price)}
-                    </p>
-                  </div>
-                  <span className="hidden rounded-full bg-[#f2f5ef] px-3 py-1 text-xs text-[#55705a] sm:inline">
-                    {chatListing.subcity}, {chatListing.city}
+            <div>
+              <h1 className="font-black text-lg tracking-tight leading-none">Liyu Market</h1>
+              <p className="text-[10px] text-amber-300 font-semibold tracking-wider uppercase">Ethiopia Hub</p>
+            </div>
+          </button>
+
+          {/* Search Bar */}
+          <div className="hidden md:flex flex-1 max-w-md relative">
+            <input 
+              type="text" 
+              placeholder={lang === 'EN' ? "Search phones, cars, apartments..." : "እቃዎችን እዚህ ይፈልጉ..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                darkMode ? 'bg-slate-700 text-white placeholder-slate-400' : 'bg-emerald-800/60 text-white placeholder-emerald-200'
+              }`}
+            />
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-amber-300" />
+          </div>
+
+          {/* Right Action Controls */}
+          <div className="flex items-center space-x-3">
+            
+            {/* Sell Button */}
+            <button 
+              onClick={handleSellRequest}
+              className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black px-3.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow-md transition"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>{lang === 'EN' ? 'Sell Item' : 'ሸጡ'}</span>
+            </button>
+
+            {/* Dark Mode Toggle Switch */}
+            <button 
+              onClick={() => { triggerHaptic(); setDarkMode(!darkMode); }}
+              className={`p-2 rounded-xl transition ${darkMode ? 'bg-slate-700 text-amber-400 hover:bg-slate-600' : 'bg-emerald-800 text-amber-300 hover:bg-emerald-900'}`}
+              title="Toggle Dark Mode"
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(); setShowSettingsModal(true); }}
+              className={`p-2 rounded-xl transition ${darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-emerald-800 text-white hover:bg-emerald-900'}`}
+              title={lang === 'EN' ? 'Settings' : 'ቅንብሮች'}
+              aria-label={lang === 'EN' ? 'Open settings' : 'ቅንብሮችን ክፈት'}
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+
+            {/* Language Switcher */}
+            <button 
+              onClick={() => { triggerHaptic(); setLang(lang === 'EN' ? 'AM' : 'EN'); }}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition ${darkMode ? 'bg-slate-700 text-slate-200' : 'bg-emerald-800 text-white'}`}
+            >
+              {lang === 'EN' ? 'አማ' : 'EN'}
+            </button>
+
+            {/* Auth / Profile Area */}
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex flex-col text-right">
+                  <span className="text-xs font-bold text-amber-300">
+                    {user.isTelegramUser
+                      ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.name
+                      : user.name}
+                  </span>
+                  <span className="text-[10px] text-slate-300">
+                    {user.isTelegramUser ? user.username || 'Telegram User' : user.phone || user.username}
                   </span>
                 </div>
-                <div className="flex min-h-[330px] flex-col gap-3 bg-[#fbfaf7] p-5">
-                  <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-white p-3.5 text-sm leading-6 shadow-sm">
-                    Hi! Thanks for asking about {chatListing.title}. Let me know what
-                    you&apos;d like to know.
-                  </div>
-                  {(messages[chatListing.id] || [])
-                    .filter((message) => message.from === "buyer")
-                    .map((message, index) => (
-                      <div
-                        key={`${chatListing.id}-${index}`}
-                        className="max-w-[85%] self-end rounded-2xl rounded-tr-sm bg-[#214d38] p-3.5 text-sm leading-6 text-white"
-                      >
-                        {message.text}
-                      </div>
-                    ))}
-                </div>
-                <form
-                  onSubmit={sendMessage}
-                  className="flex items-center gap-2 border-t border-[#eeece6] p-3"
-                >
-                  <input
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    placeholder="Write a message..."
-                    aria-label="Message"
-                    className="h-11 min-w-0 flex-1 rounded-full bg-[#f5f5f0] px-4 text-sm outline-none placeholder:text-[#9a9e96] focus:ring-2 focus:ring-[#b6ccb8]"
+                {user.photoUrl ? (
+                  <img
+                    src={user.photoUrl}
+                    alt={`${user.name}'s Telegram profile`}
+                    referrerPolicy="no-referrer"
+                    className="h-9 w-9 rounded-full border border-white/30 object-cover"
                   />
-                  <button
-                    type="submit"
-                    aria-label="Send message"
-                    className="grid h-11 w-11 place-items-center rounded-full bg-[#214d38] text-white transition hover:bg-[#183c2b]"
-                  >
-                    <Send size={17} />
-                  </button>
-                </form>
-                <p className="border-t border-[#f0eee8] px-4 py-2 text-center text-[10px] text-[#94988f]">
-                  Keep your conversations and meetups safe.
-                </p>
+                ) : (
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-800 text-amber-300">
+                    <User className="h-4 w-4" />
+                  </span>
+                )}
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-xl transition"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             ) : (
-              <div className="rounded-[1.5rem] border border-[#eae8df] bg-white p-8 text-center sm:p-14">
-                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#eff4ed] text-[#42684a]">
-                  <MessageCircle size={24} />
-                </span>
-                <h2 className="mt-4 text-lg font-semibold">Your inbox is ready</h2>
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#7b837a]">
-                  Message a seller from any listing to start a conversation.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("home")}
-                  className="mt-5 rounded-full bg-[#214d38] px-5 py-2.5 text-sm font-semibold text-white"
+              <div className="flex gap-1.5">
+                <button 
+                  onClick={() => { triggerHaptic(); setAuthTab('signin'); setShowAuthModal(true); }}
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 transition"
                 >
-                  Explore listings
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{lang === 'EN' ? 'Sign In' : 'ግቡ'}</span>
+                </button>
+                <button 
+                  onClick={() => { triggerHaptic(); setAuthTab('signup'); setShowAuthModal(true); }}
+                  className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 transition hidden sm:flex"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{lang === 'EN' ? 'Sign Up' : 'ተመዝገቡ'}</span>
                 </button>
               </div>
             )}
-          </section>
-        ) : (
-          <>
-            <section className="relative mt-6 overflow-hidden rounded-[1.7rem] bg-[#214d38] px-6 py-8 text-white sm:mt-8 sm:px-10 sm:py-11 lg:px-14">
-              <div className="pointer-events-none absolute -right-10 -top-20 h-72 w-72 rounded-full border border-white/10 sm:right-16 sm:top-[-8rem] sm:h-[28rem] sm:w-[28rem]" />
-              <div className="pointer-events-none absolute -right-1 -top-10 h-48 w-48 rounded-full border border-white/10 sm:right-24 sm:top-[-5rem] sm:h-[23rem] sm:w-[23rem]" />
-              <div className="relative max-w-2xl">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-medium tracking-wide text-[#e2eadf]">
-                  <Sparkles size={13} />
-                  GOOD FINDS, CLOSER TO HOME
-                </span>
-                <h1 className="mt-5 max-w-xl text-[2.4rem] font-semibold leading-[1.08] tracking-[-0.04em] sm:text-5xl">
-                  Give good things
-                  <br />
-                  a <span className="font-serif italic text-[#e7b77e]">new</span>{" "}
-                  story.
-                </h1>
-                <p className="mt-4 max-w-md text-sm leading-6 text-[#d3dfd2] sm:text-base">
-                  Buy and sell pre-loved finds with people in your neighborhood.
-                  Better for your pocket, kinder to the planet.
-                </p>
-                <button
-                  type="button"
-                  onClick={startSelling}
-                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#f1c48f] px-5 py-3 text-sm font-semibold text-[#274330] transition hover:bg-[#f5d2a7]"
-                >
-                  List something you love
-                  <ArrowUpRight size={17} />
-                </button>
-              </div>
-              <div className="absolute bottom-5 right-6 hidden h-36 w-36 rotate-[-8deg] items-center justify-center rounded-[2rem] border border-white/20 bg-[#f1c48f] text-[#214d38] shadow-2xl sm:flex lg:bottom-8 lg:right-24 lg:h-44 lg:w-44">
-                <div className="text-center">
-                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white/50">
-                    <Tag size={23} />
-                  </span>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.15em]">
-                    Made for
-                  </p>
-                  <p className="text-lg font-semibold">Ethiopia</p>
-                </div>
-              </div>
-            </section>
 
-            <section className="mt-8 sm:mt-10">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7b8679]">
-                    Find your next favorite
-                  </p>
-                  <h2 className="mt-1.5 text-2xl font-semibold tracking-tight sm:text-[1.8rem]">
-                    Good things, nearby<span className="text-[#d68d4e]">.</span>
-                  </h2>
-                </div>
-                <div className="flex w-full gap-2 sm:w-auto">
-                  <label className="flex h-12 flex-1 items-center gap-2.5 rounded-full border border-[#e8e6dd] bg-white px-4 sm:w-72 sm:flex-none">
-                    <Search size={17} className="shrink-0 text-[#788176]" />
-                    <input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Search finds..."
-                      aria-label="Search listings"
-                      className="w-full bg-transparent text-sm outline-none placeholder:text-[#9a9e96]"
-                    />
-                    {search && (
-                      <button
-                        type="button"
-                        aria-label="Clear search"
-                        onClick={() => setSearch("")}
-                        className="text-[#8b9288]"
-                      >
-                        <X size={15} />
-                      </button>
-                    )}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowFilters((visible) => !visible)}
-                    aria-expanded={showFilters}
-                    className={`flex h-12 items-center gap-2 rounded-full border px-4 text-sm font-medium transition ${
-                      showFilters
-                        ? "border-[#214d38] bg-[#214d38] text-white"
-                        : "border-[#e8e6dd] bg-white text-[#435044]"
-                    }`}
-                  >
-                    <SlidersHorizontal size={16} />
-                    <span className="hidden sm:inline">Filters</span>
-                  </button>
-                </div>
-              </div>
+          </div>
+        </div>
+      </header>
 
-              <div className="mt-5 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {categories.map((item) => (
-                  <button
-                    type="button"
-                    key={item}
-                    onClick={() => {
-                      setCategory(item);
-                      setActiveTab("home");
-                    }}
-                    className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium transition ${
-                      category === item
-                        ? "bg-[#214d38] text-white"
-                        : "border border-[#e8e6dd] bg-white text-[#5b665b] hover:border-[#cbd6c8]"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+      {/* --- FILTER & CATEGORY TOOLBAR --- */}
+      <div className={`border-b transition-colors ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+        <div className="max-w-7xl mx-auto px-4 py-3 space-y-3">
+          
+          {/* Mobile Search Input */}
+          <div className="md:hidden relative">
+            <input 
+              type="text" 
+              placeholder={lang === 'EN' ? "Search items..." : "እቃዎችን ይፈልጉ..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'
+              }`}
+            />
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          </div>
 
-              {showFilters && (
-                <div className="mt-3 grid gap-3 rounded-2xl border border-[#e8e6dd] bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="text-xs font-medium text-[#637061]">
-                    City
-                    <select
-                      value={city}
-                      onChange={(event) => setSelectedCity(event.target.value)}
-                      className="mt-1.5 h-10 w-full rounded-xl border border-[#e9e8e1] bg-[#fbfaf7] px-3 text-sm text-[#344439] outline-none focus:border-[#9db69e]"
-                    >
-                      <option>All cities</option>
-                      {Object.keys(citySubcities).map((cityName) => (
-                        <option key={cityName}>{cityName}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs font-medium text-[#637061]">
-                    Subcity
-                    <select
-                      value={subcity}
-                      onChange={(event) => setSubcity(event.target.value)}
-                      disabled={city === "All cities"}
-                      className="mt-1.5 h-10 w-full rounded-xl border border-[#e9e8e1] bg-[#fbfaf7] px-3 text-sm text-[#344439] outline-none disabled:opacity-50"
-                    >
-                      <option>All subcities</option>
-                      {(citySubcities[city] || []).map((area) => (
-                        <option key={area}>{area}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs font-medium text-[#637061]">
-                    Minimum price (ETB)
-                    <input
-                      type="number"
-                      min="0"
-                      value={minPrice}
-                      onChange={(event) => setMinPrice(event.target.value)}
-                      placeholder="No minimum"
-                      className="mt-1.5 h-10 w-full rounded-xl border border-[#e9e8e1] bg-[#fbfaf7] px-3 text-sm text-[#344439] outline-none placeholder:text-[#a0a49c] focus:border-[#9db69e]"
-                    />
-                  </label>
-                  <label className="text-xs font-medium text-[#637061]">
-                    Maximum price (ETB)
-                    <input
-                      type="number"
-                      min="0"
-                      value={maxPrice}
-                      onChange={(event) => setMaxPrice(event.target.value)}
-                      placeholder="No maximum"
-                      className="mt-1.5 h-10 w-full rounded-xl border border-[#e9e8e1] bg-[#fbfaf7] px-3 text-sm text-[#344439] outline-none placeholder:text-[#a0a49c] focus:border-[#9db69e]"
-                    />
-                  </label>
-                </div>
-              )}
-
-              <div className="mt-5 flex items-center justify-between">
-                <p className="text-sm text-[#798176]">
-                  {activeTab === "saved" ? "Your saved finds" : "Fresh in the market"}
-                  <span className="ml-1.5 text-[#a2a69e]">
-                    ({visibleListings.length})
-                  </span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("home");
-                    setCategory("Everything");
-                    setCity("All cities");
-                    setSubcity("All subcities");
-                    setMinPrice("");
-                    setMaxPrice("");
-                    setSearch("");
-                  }}
-                  className="text-xs font-medium text-[#56725a] hover:text-[#214d38]"
-                >
-                  Clear filters
-                </button>
-              </div>
-
-              {visibleListings.length ? (
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                  {visibleListings.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      saved={savedIds.includes(listing.id)}
-                      onSave={toggleSaved}
-                      onChat={openChat}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-[1.5rem] border border-dashed border-[#d9ddd4] bg-white px-5 py-14 text-center">
-                  <PackageOpen size={28} className="mx-auto text-[#8a9b88]" />
-                  <h3 className="mt-3 font-semibold">No finds just yet</h3>
-                  <p className="mt-1 text-sm text-[#7b837a]">
-                    Try changing your search or filters.
-                  </p>
-                </div>
-              )}
-            </section>
-
-            <section className="my-10 flex flex-col items-start justify-between gap-4 rounded-[1.5rem] border border-[#e5e8df] bg-[#eff2e9] p-5 sm:flex-row sm:items-center sm:px-7">
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-[#527358]">
-                  <Camera size={19} />
-                </span>
-                <div>
-                  <h3 className="font-semibold">Have something to pass on?</h3>
-                  <p className="mt-1 text-sm text-[#6f796e]">
-                    Give it a new home in just a few steps.
-                  </p>
-                </div>
-              </div>
+          {/* Cities Dropdown Filters */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar items-center pb-1">
+            <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5" /> City:
+            </span>
+            {CITIES.map(city => (
               <button
-                type="button"
-                onClick={startSelling}
-                className="flex items-center gap-2 rounded-full bg-[#214d38] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#183c2b]"
+                key={city.id}
+                onClick={() => { triggerHaptic(); citySelectionChanged.current = true; setLocationStatus('manual'); setSelectedCity(city.id); setSelectedSubcity('all'); }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+                  selectedCity === city.id 
+                    ? 'bg-emerald-600 text-white shadow-sm' 
+                    : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'
+                }`}
               >
-                Start selling
-                <ChevronRight size={16} />
+                {lang === 'EN' ? city.name : city.amharic}
               </button>
-            </section>
-          </>
+            ))}
+          </div>
+          {locationStatus === 'pending' && (
+            <p role="status" className="text-[11px] text-slate-400">
+              {lang === 'EN' ? 'Detecting your nearby city…' : 'በአቅራቢያዎ ያለው ከተማ እየተፈለገ ነው…'}
+            </p>
+          )}
+          {locationStatus === 'unavailable' && (
+            <p role="status" className="text-[11px] text-slate-400">
+              {lang === 'EN' ? 'Location unavailable. Showing all cities.' : 'አካባቢዎ አልተገኘም። ሁሉም ከተሞች እየታዩ ነው።'}
+            </p>
+          )}
+
+          {/* Subcity Selector */}
+          {selectedCity !== 'all' && SUBCITIES[selectedCity] && (
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar items-center pt-1 border-t border-slate-100 dark:border-slate-700">
+              <span className="text-[11px] font-semibold text-slate-400">Area:</span>
+              <button
+                onClick={() => setSelectedSubcity('all')}
+                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold ${selectedSubcity === 'all' ? 'bg-amber-400 text-emerald-950' : 'text-slate-400'}`}
+              >
+                All Areas
+              </button>
+              {SUBCITIES[selectedCity].map(sub => (
+                <button
+                  key={sub}
+                  onClick={() => { triggerHaptic(); setSelectedSubcity(sub); }}
+                  className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold whitespace-nowrap ${
+                    selectedSubcity === sub ? 'bg-amber-400 text-emerald-950' : 'text-slate-400 hover:text-amber-400'
+                  }`}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(); setShowSavedOnly((current) => !current); }}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                showSavedOnly
+                  ? 'bg-rose-600 text-white'
+                  : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              <Heart className="h-3.5 w-3.5" fill={showSavedOnly ? 'currentColor' : 'none'} />
+              {lang === 'EN' ? 'Saved' : 'የተቀመጡ'}
+            </button>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+              {lang === 'EN' ? 'ETB min' : 'ዝቅተኛ ብር'}
+              <input
+                type="number"
+                min="0"
+                value={minPrice}
+                onChange={(event) => setMinPrice(event.target.value)}
+                placeholder="0"
+                className={`w-24 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+              {lang === 'EN' ? 'ETB max' : 'ከፍተኛ ብር'}
+              <input
+                type="number"
+                min="0"
+                value={maxPrice}
+                onChange={(event) => setMaxPrice(event.target.value)}
+                placeholder={lang === 'EN' ? 'No limit' : 'ገደብ የለም'}
+                className={`w-24 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('all');
+                citySelectionChanged.current = true;
+                setLocationStatus('manual');
+                setSelectedCity('all');
+                setSelectedSubcity('all');
+                setMinPrice('');
+                setMaxPrice('');
+                setSearchTerm('');
+                setShowSavedOnly(false);
+              }}
+              className="ml-auto text-[11px] font-semibold text-emerald-600 hover:text-emerald-700"
+            >
+              {lang === 'EN' ? 'Clear filters' : 'ማጣሪያዎችን አጽዳ'}
+            </button>
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1">
+            {MOCK_CATEGORIES.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => { triggerHaptic(); setSelectedCategory(cat.id); }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+                  selectedCategory === cat.id 
+                    ? 'bg-amber-400 text-emerald-950 shadow-sm' 
+                    : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {lang === 'EN' ? cat.name : cat.amharic}
+              </button>
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* --- MAIN FEED --- */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-black">
+            {lang === 'EN' ? 'Recent Marketplace Listings' : 'ቅርብ ጊዜ የወጡ እቃዎች'}
+          </h2>
+          <span className="text-xs font-semibold text-slate-400">
+            {filteredListings.length} {lang === 'EN' ? 'items found' : 'እቃዎች ተገኝተዋል'}
+          </span>
+        </div>
+
+        {filteredListings.length === 0 ? (
+          <div className="text-center py-12 bg-slate-100 dark:bg-slate-800 rounded-3xl">
+            <Search className="w-10 h-10 mx-auto text-slate-400 mb-2" />
+            <p className="text-sm font-bold text-slate-400">
+              {lang === 'EN' ? 'No items found matching your filters.' : 'የመረጡትን ማጣሪያ የሚያሟላ ዕቃ አልተገኘም።'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredListings.map((item) => (
+              <div 
+                key={item.id}
+                onClick={() => { triggerHaptic(); setSelectedListing(item); }}
+                className={`rounded-2xl overflow-hidden border shadow-sm hover:shadow-md cursor-pointer transition ${
+                  darkMode ? 'bg-slate-800 border-slate-700 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-emerald-300'
+                }`}
+              >
+                <div className="relative">
+                  <img src={item.image} alt={lang === 'EN' ? item.title : item.titleAmharic || item.title} className="w-full h-44 object-cover" />
+                  <button
+                    type="button"
+                    aria-label={savedIds.includes(item.id) ? 'Remove from saved items' : 'Save item'}
+                    onClick={(event) => { event.stopPropagation(); toggleSaved(item.id); }}
+                    className="absolute top-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-rose-600 shadow"
+                  >
+                    <Heart className="h-4 w-4" fill={savedIds.includes(item.id) ? 'currentColor' : 'none'} />
+                  </button>
+                  {item.verified && (
+                    <span className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow">
+                      <ShieldCheck className="w-3 h-3" /> Verified
+                    </span>
+                  )}
+                </div>
+                <div className="p-4">
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <h3 className="font-bold text-sm line-clamp-1">{lang === 'EN' ? item.title : item.titleAmharic || item.title}</h3>
+                    <span className="bg-amber-400/20 text-amber-600 dark:text-amber-300 text-xs font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
+                      ETB {item.price.toLocaleString('en-ET')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>
+                      {isListingLocationHidden(item)
+                        ? (lang === 'EN' ? 'Location Hidden by Seller' : 'አካባቢው በሻጩ ተደብቋል')
+                        : `${item.subcity}, ${lang === 'EN' ? cityName(item.city) : CITIES.find((city) => city.id === item.city)?.amharic || cityName(item.city)}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <span className="font-medium text-slate-400">{item.seller.name}</span>
+                    <span className="text-emerald-500 font-bold">{item.safeSpot ? (lang === 'EN' ? '🛡️ Safe Spot' : '🛡️ ደህንነቱ የተጠበቀ') : ''}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e8e6df] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[66px] max-w-lg items-center justify-around px-4">
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button
-              type="button"
-              key={id}
-              onClick={() => {
-                setActiveTab(id);
-                if (id === "inbox") setChatListing(null);
-              }}
-              className={`flex min-w-[72px] flex-col items-center gap-1 text-[10px] font-medium transition ${
-                activeTab === id ? "text-[#214d38]" : "text-[#90968d]"
-              }`}
-            >
-              <span className="relative">
-                <Icon size={20} fill={id === "saved" && activeTab === id ? "currentColor" : "none"} />
-                {id === "inbox" && (
-                  <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full border-2 border-white bg-[#d68d4e]" />
-                )}
-              </span>
-              {label}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={startSelling}
-            className="flex min-w-[72px] flex-col items-center gap-1 text-[10px] font-medium text-[#90968d]"
-          >
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#f3f5ef] text-[#315940]">
-              <UserRound size={17} />
-            </span>
-            Profile
-          </button>
-        </div>
-      </nav>
-
-      {showListingForm && (
+      {/* --- SELL LISTING MODAL --- */}
+      {showSellModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[#16251b]/50 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowListingForm(false);
+            if (event.target === event.currentTarget) setShowSellModal(false);
           }}
         >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="listing-form-title"
-            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-[1.7rem] bg-[#fbfaf7] p-5 shadow-2xl sm:rounded-[1.7rem] sm:p-7"
-          >
-            <div className="flex items-start justify-between">
+          <section className={`my-0 max-h-[94vh] w-full max-w-xl overflow-y-auto rounded-t-3xl p-5 shadow-2xl transition-colors sm:my-8 sm:rounded-3xl sm:p-6 ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+            <div className="mb-5 flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#758174]">
-                  Sell on Liyu
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
+                  Liyu Used Market
                 </p>
-                <h2 id="listing-form-title" className="mt-1 text-2xl font-semibold">
-                  List your item<span className="text-[#d68d4e]">.</span>
+                <h2 className="mt-1 text-xl font-black">
+                  {lang === 'EN' ? 'Create a listing' : 'አዲስ ዕቃ ያቅርቡ'}
                 </h2>
-                <p className="mt-1 text-sm text-[#7b837a]">
-                  Tell your neighbors what you&apos;re passing on.
+                <p className="mt-1 text-xs text-slate-400">
+                  {lang === 'EN' ? 'Add item details so nearby buyers can find it.' : 'በአቅራቢያዎ ያሉ ገዢዎች እንዲያገኙት ዝርዝሩን ያስገቡ።'}
                 </p>
               </div>
               <button
                 type="button"
                 aria-label="Close listing form"
-                onClick={() => setShowListingForm(false)}
-                className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#657064] hover:bg-[#eff1ea]"
+                onClick={() => setShowSellModal(false)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
               >
-                <X size={18} />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={publishListing} className="mt-5 space-y-3.5">
-              <label className="block text-xs font-medium text-[#637061]">
-                Item name
+
+            <form onSubmit={handleSellSubmit} className="space-y-3">
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Item title *' : 'የዕቃ ስም *'}
                 <input
                   name="title"
                   required
-                  maxLength="70"
-                  placeholder="e.g. Wooden coffee table"
-                  className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3.5 text-sm outline-none placeholder:text-[#a0a49c] focus:border-[#9db69e]"
+                  maxLength="90"
+                  placeholder="e.g. iPhone 12, 128GB"
+                  className={`mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600`}
                 />
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-medium text-[#637061]">
-                  Price (ETB)
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Title in Amharic (optional)' : 'የዕቃው ስም በአማርኛ (አማራጭ)'}
+                <input
+                  name="titleAmharic"
+                  maxLength="90"
+                  placeholder="አማርኛ ርዕስ"
+                  className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                />
+              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'Category *' : 'ምድብ *'}
+                  <select
+                    name="category"
+                    required
+                    className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                  >
+                    {MOCK_CATEGORIES.filter((item) => item.id !== 'all').map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {lang === 'EN' ? item.name : item.amharic}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'Price (ETB) *' : 'ዋጋ (ብር) *'}
                   <input
                     name="price"
                     type="number"
                     min="1"
+                    step="1"
                     required
                     placeholder="0"
-                    className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3.5 text-sm outline-none placeholder:text-[#a0a49c] focus:border-[#9db69e]"
+                    className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
                   />
                 </label>
-                <label className="block text-xs font-medium text-[#637061]">
-                  Category
-                  <select
-                    name="category"
-                    className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3 text-sm outline-none focus:border-[#9db69e]"
-                  >
-                    {categories
-                      .filter((item) => item !== "Everything")
-                      .map((item) => (
-                        <option key={item}>{item}</option>
-                      ))}
-                  </select>
-                </label>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-medium text-[#637061]">
-                  Condition
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'Condition' : 'ሁኔታ'}
                   <select
                     name="condition"
-                    className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3 text-sm outline-none focus:border-[#9db69e]"
+                    className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
                   >
-                    {["Like new", "Good", "Fair", "New"].map((item) => (
-                      <option key={item}>{item}</option>
+                    {['Like New', 'Excellent', 'Good', 'Fair', 'Used'].map((condition) => (
+                      <option key={condition}>{condition}</option>
                     ))}
                   </select>
                 </label>
-                <label className="block text-xs font-medium text-[#637061]">
-                  City
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'City *' : 'ከተማ *'}
                   <select
                     name="city"
                     required
-                    value={listingCityForm}
-                    className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3 text-sm outline-none focus:border-[#9db69e]"
-                    onChange={(event) => setListingCityForm(event.target.value)}
+                    value={sellCity}
+                    onChange={(event) => setSellCity(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
                   >
-                    {Object.keys(citySubcities).map((item) => (
-                      <option key={item}>{item}</option>
+                    {CITIES.filter((item) => item.id !== 'all').map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {lang === 'EN' ? item.name : item.amharic}
+                      </option>
                     ))}
                   </select>
                 </label>
               </div>
-              <label className="block text-xs font-medium text-[#637061]">
-                Subcity / neighborhood
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Subcity / area *' : 'ክፍለ ከተማ / አካባቢ *'}
                 <select
                   name="subcity"
                   required
-                  className="mt-1.5 h-11 w-full rounded-xl border border-[#e5e5dd] bg-white px-3 text-sm outline-none focus:border-[#9db69e]"
+                  className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
                 >
-                  {citySubcities[listingCityForm].map((item) => (
-                    <option key={item}>{item}</option>
+                  {SUBCITIES[sellCity].map((area) => (
+                    <option key={area}>{area}</option>
                   ))}
                 </select>
               </label>
-              <p className="flex items-start gap-2 rounded-xl bg-[#eff3eb] p-3 text-xs leading-5 text-[#637061]">
-                <Check size={15} className="mt-0.5 shrink-0 text-[#557a5a]" />
-                Meet in a public place and agree on payment directly with your buyer.
-              </p>
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-600">
+                <input
+                  type="checkbox"
+                  name="hideLocation"
+                  defaultChecked={hideLocation}
+                  className="mt-0.5 h-4 w-4 accent-emerald-600"
+                />
+                <span>
+                  <span className="block font-bold">
+                    {lang === 'EN' ? 'Hide my city and area for this listing' : 'ለዚህ ማስታወቂያ ከተማዬን እና አካባቢዬን ደብቅ'}
+                  </span>
+                  <span className="mt-1 block font-normal text-slate-400">
+                    {lang === 'EN' ? 'Buyers will see that your location is hidden.' : 'ገዢዎች አካባቢዎ እንደተደበቀ ያያሉ።'}
+                  </span>
+                </span>
+              </label>
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Safe meeting spot *' : 'ደህንነቱ የተጠበቀ መገናኛ *'}
+                <input
+                  name="safeSpot"
+                  required
+                  maxLength="120"
+                  placeholder="e.g. Bole Medhanialem Police Station Compound"
+                  className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                />
+              </label>
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Image URL (optional)' : 'የምስል አድራሻ (አማራጭ)'}
+                <input
+                  name="image"
+                  type="url"
+                  placeholder="https://..."
+                  className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                />
+              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'Phone number *' : 'ስልክ ቁጥር *'}
+                  <input
+                    name="phone"
+                    type="tel"
+                    required
+                    defaultValue={user?.phone || ''}
+                    placeholder="+251 91 123 4567"
+                    className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                  />
+                </label>
+                <label className="block text-xs font-bold">
+                  {lang === 'EN' ? 'Telegram username' : 'የቴሌግራም ስም'}
+                  <input
+                    name="telegramHandle"
+                    defaultValue={user?.username || ''}
+                    placeholder="@username"
+                    className="mt-1.5 w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                  />
+                </label>
+              </div>
+              <label className="block text-xs font-bold">
+                {lang === 'EN' ? 'Description' : 'መግለጫ'}
+                <textarea
+                  name="description"
+                  rows="3"
+                  maxLength="500"
+                  placeholder={lang === 'EN' ? 'Describe your item...' : 'ዕቃውን ይግለጹ...'}
+                  className="mt-1.5 w-full resize-y rounded-xl px-3.5 py-2.5 text-sm outline-none ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:ring-slate-600"
+                />
+              </label>
+              {sellError && <p role="alert" className="text-xs font-semibold text-red-500">{sellError}</p>}
               <button
                 type="submit"
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#214d38] text-sm font-semibold text-white transition hover:bg-[#183c2b]"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 py-3 text-sm font-black text-white shadow-md transition hover:bg-emerald-800"
               >
-                <Plus size={17} />
-                Publish listing
+                <PlusCircle className="h-4 w-4" />
+                {lang === 'EN' ? 'Publish Listing' : 'ዕቃውን አቅርብ'}
               </button>
             </form>
           </section>
         </div>
       )}
 
-      {toast && (
-        <div
-          role="status"
-          className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#214d38] px-5 py-3 text-sm font-medium text-white shadow-xl"
-        >
-          <Check size={16} />
-          {toast}
+      {/* --- LISTING DETAIL MODAL --- */}
+      {selectedListing && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className={`rounded-3xl max-w-lg w-full p-6 shadow-2xl relative my-8 transition-colors ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+            <button 
+              onClick={() => setSelectedListing(null)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <img src={selectedListing.image} alt={selectedListing.title} className="w-full h-56 object-cover rounded-2xl mb-4" />
+
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="font-black text-lg">{lang === 'EN' ? selectedListing.title : selectedListing.titleAmharic || selectedListing.title}</h3>
+              <span className="text-lg font-black text-amber-500 whitespace-nowrap">
+                ETB {selectedListing.price.toLocaleString('en-ET')}
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-400 mb-4">{selectedListing.description}</p>
+
+            <div className="p-3 bg-emerald-500/10 rounded-2xl mb-4 text-xs space-y-1">
+              <div className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4" /> Recommended Safe Meeting Spot:
+              </div>
+              <div className="text-slate-600 dark:text-slate-300 font-medium pl-5">
+                {isListingLocationHidden(selectedListing)
+                  ? (lang === 'EN' ? 'Meeting location shared privately with the buyer.' : 'የመገናኛ ቦታ ከገዢው ጋር በግል ይጋራል።')
+                  : selectedListing.safeSpot}
+              </div>
+            </div>
+
+            <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-700">
+              <span className="font-semibold">{selectedListing.seller.name}</span>
+              {selectedListing.seller.rating > 0 && (
+                <span className="flex items-center gap-1 font-bold text-amber-500">
+                  <Star className="h-3.5 w-3.5 fill-current" />
+                  {selectedListing.seller.rating} ({selectedListing.seller.reviewCount})
+                </span>
+              )}
+              <span className="text-slate-400">
+                {isListingLocationHidden(selectedListing)
+                  ? (lang === 'EN' ? 'Ethiopia (Location Hidden)' : 'ኢትዮጵያ (አካባቢው ተደብቋል)')
+                  : `${selectedListing.subcity}, ${cityName(selectedListing.city)}`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <a 
+                href={`tel:${selectedListing.seller.phone.replace(/[^\d+]/g, '')}`}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5"
+              >
+                <Phone className="w-4 h-4" /> Call Seller
+              </a>
+              {selectedListing.telegramHandle && (
+                <a
+                  href={`https://t.me/${selectedListing.telegramHandle.replace(/^@/, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={triggerHaptic}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-4 h-4" /> Telegram
+                </a>
+              )}
+              <button 
+                onClick={() => {
+                  setActiveChat(selectedListing);
+                  setChatMessages([{ id: 1, text: `Hi! Is "${selectedListing.title}" still available?`, sender: 'user', time: 'Just now' }]);
+                  setSelectedListing(null);
+                }}
+                className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5"
+              >
+                <MessageSquare className="w-4 h-4" /> In-App Chat
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* --- IN-APP CHAT MODAL --- */}
+      {activeChat && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`rounded-3xl max-w-md w-full h-[500px] flex flex-col p-4 shadow-2xl relative transition-colors ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+            <div className="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-slate-700">
+              <div>
+                <h4 className="font-bold text-sm">{activeChat.seller.name}</h4>
+                <p className="text-[10px] text-slate-400">{activeChat.title}</p>
+              </div>
+              <button onClick={() => setActiveChat(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 space-y-2">
+              {chatMessages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
+                    msg.sender === 'user' ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100'
+                  }`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendMessage} className="pt-2 border-t border-slate-200 dark:border-slate-700 flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Type a message..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                className={`flex-1 px-3 py-2 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+              />
+              <button type="submit" className="p-2 bg-amber-400 text-emerald-950 rounded-xl font-bold">
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- AUTHENTICATION MODAL (SIGN IN & SIGN UP) --- */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`rounded-3xl max-w-md w-full p-6 shadow-2xl relative transition-colors ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+            <button 
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-5 pr-8">
+              <h2 className="text-xl font-black">
+                {lang === 'EN' ? 'Welcome to Liyu Market' : 'ወደ ልዩ ገበያ እንኳን በደህና መጡ'}
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {lang === 'EN' ? 'Sign in or create an account to sell and chat.' : 'ለመሸጥ እና ለመወያየት ይግቡ ወይም መለያ ይፍጠሩ።'}
+              </p>
+            </div>
+
+            {/* Auth Tab Buttons */}
+            <div className="flex border-b border-slate-200 dark:border-slate-700 mb-6">
+              <button 
+                onClick={() => setAuthTab('signin')}
+                className={`flex-1 py-2 text-sm font-bold border-b-2 text-center transition ${
+                  authTab === 'signin' 
+                    ? 'border-amber-400 text-amber-500' 
+                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                {lang === 'EN' ? 'Sign In' : 'ግቡ'}
+              </button>
+              <button 
+                onClick={() => setAuthTab('signup')}
+                className={`flex-1 py-2 text-sm font-bold border-b-2 text-center transition ${
+                  authTab === 'signup' 
+                    ? 'border-amber-400 text-amber-500' 
+                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                {lang === 'EN' ? 'Sign Up' : 'ተመዝገቡ'}
+              </button>
+            </div>
+
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {authTab === 'signup' && (
+                <div>
+                  <label className="text-xs font-bold mb-1 block">
+                    {lang === 'EN' ? 'Full Name' : 'ሙሉ ስም'}
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Abebe Kebede"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+                      required
+                    />
+                    <User className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold mb-1 block">
+                  {lang === 'EN' ? 'Phone Number' : 'ስልክ ቁጥር'}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="tel" 
+                    placeholder="+251 91 123 4567"
+                    value={authForm.phone}
+                    onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+                    required
+                  />
+                  <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold mb-1 block">
+                  {lang === 'EN' ? 'Password' : 'የይለፍ ቃል'}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900'}`}
+                    required
+                  />
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-black py-3 rounded-xl text-xs shadow-md transition"
+              >
+                {authTab === 'signin' 
+                  ? (lang === 'EN' ? 'Sign In' : 'ግቡ') 
+                  : (lang === 'EN' ? 'Create Account' : 'መለያ ክፈት')}
+              </button>
+            </form>
+            <div className="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+              {lang === 'EN' ? 'or' : 'ወይም'}
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+            </div>
+            <button
+              type="button"
+              onClick={handleTelegramSignIn}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 py-3 text-xs font-black text-white transition hover:bg-sky-700"
+            >
+              <Send className="h-4 w-4" />
+              {lang === 'EN' ? 'Sign In with Telegram' : 'በቴሌግራም ይግቡ'}
+            </button>
+            {authNotice && (
+              <p role="status" className="mt-3 text-center text-xs text-amber-600 dark:text-amber-300">
+                {authNotice}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSettingsModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowSettingsModal(false);
+          }}
+        >
+          <section className={`relative w-full max-w-md rounded-3xl p-6 shadow-2xl ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+            <button
+              type="button"
+              aria-label={lang === 'EN' ? 'Close settings' : 'ቅንብሮችን ዝጋ'}
+              onClick={() => setShowSettingsModal(false)}
+              className="absolute right-4 top-4 rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="mb-5 pr-8">
+              <h2 className="text-xl font-black">
+                {lang === 'EN' ? 'Settings' : 'ቅንብሮች'}
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {lang === 'EN' ? 'Choose what location details to share on your listings.' : 'በማስታወቂያዎችዎ ላይ የሚጋሩትን የአካባቢ መረጃ ይምረጡ።'}
+              </p>
+            </div>
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 dark:border-slate-600">
+              <span>
+                <span className="block text-sm font-bold">
+                  {lang === 'EN' ? 'Hide my exact location / area' : 'ትክክለኛ አካባቢዬን ደብቅ'}
+                </span>
+                <span className="mt-1 block text-xs text-slate-400">
+                  {lang === 'EN' ? 'Use this as the default for new listings. You can change it per post.' : 'ለአዳዲስ ማስታወቂያዎች ነባሪ ያድርጉት። ለእያንዳንዱ ማስታወቂያ መቀየር ይችላሉ።'}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={hideLocation}
+                onChange={(event) => setHideLocation(event.target.checked)}
+                className="h-5 w-5 shrink-0 accent-emerald-600"
+                aria-label={lang === 'EN' ? 'Hide my exact location or area' : 'ትክክለኛ አካባቢዬን ደብቅ'}
+              />
+            </label>
+          </section>
+        </div>
+      )}
+
     </div>
   );
 }
-
-export default App;
